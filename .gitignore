@@ -1,0 +1,14 @@
+# Python virtual environment
+.venv/
+__pycache__/
+
+# dbt build output
+target/
+dbt_packages/
+logs/
+
+# Secrets: never commit these
+*.json
+!**/package-lock.json
+.env
+profiles.yml

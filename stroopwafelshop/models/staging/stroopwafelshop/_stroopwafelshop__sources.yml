@@ -1,0 +1,24 @@
+version: 2
+
+sources:
+  - name: stroopwafelshop
+    description: >
+      Raw stroopwafel shop data, loaded by Airbyte from Google Sheets.
+      All business columns arrive as STRING; Airbyte adds _airbyte_* metadata columns.
+    database: stroopwafelshop-512419
+    schema: stroopwafelshopdata
+    config:
+      loaded_at_field: _airbyte_extracted_at
+    tables:
+      - name: Employees
+        description: One row per employee, including personal and contract details.
+      - name: Products
+        description: One row per product with current unit cost and unit price.
+      - name: Promotions
+        description: One row per promotion, each tied to a single product.
+      - name: Sales
+        description: One row per sale (till transaction).
+      - name: Sales_lines
+        description: One row per product line within a sale.
+      - name: Shifts
+        description: One row per employee shift; hours is a text range like "10:00-14:00".

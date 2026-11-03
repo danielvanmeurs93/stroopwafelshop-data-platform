@@ -1,0 +1,147 @@
+version: 2
+
+models:
+  - name: stg_stroopwafelshop__employees
+    description: Employees, typed and renamed. Still contains personal data (date of birth, contact number); do not expose further downstream than needed.
+    columns:
+      - name: employee_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: hourly_rate
+        description: Current hourly wage in EUR.
+        data_tests:
+          - not_null
+
+  - name: stg_stroopwafelshop__products
+    description: Products, typed and renamed. Prices and costs are current values, not historical.
+    columns:
+      - name: product_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: product_name
+        data_tests:
+          - unique
+          - not_null
+
+  - name: stg_stroopwafelshop__promotions
+    description: Promotions, typed and renamed. Each promotion applies to a single product for a date range.
+    columns:
+      - name: promotion_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: product_id
+        description: Product the promotion applies to.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_stroopwafelshop__products')
+                field: product_id
+
+  - name: stg_stroopwafelshop__sales
+    description: Sales (till transactions), typed and renamed. One row per sale.
+    columns:
+      - name: sale_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: employee_id
+        description: Employee who handled the sale.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_stroopwafelshop__employees')
+                field: employee_id
+      - name: sold_at
+        description: Sale date and time combined.
+      - name: weekday_name
+        description: Weekday as delivered by the source.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+      - name: payment_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['cash', 'credit_card', 'debit_card']
+
+  - name: stg_stroopwafelshop__sales_lines
+    description: Sales lines, typed and renamed. One row per product per sale.
+    columns:
+      - name: sales_line_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: sale_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_stroopwafelshop__sales')
+                field: sale_id
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_stroopwafelshop__products')
+                field: product_id
+      - name: promotion_id
+        description: Promotion applied to this line; null when no promotion.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_stroopwafelshop__promotions')
+                field: promotion_id
+      - name: quantity_sold
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+      - name: total_price
+        description: Net line amount (unit_price * quantity_sold - total_discount).
+
+  - name: stg_stroopwafelshop__shifts
+    description: Employee shifts with the text range in "hours" parsed into start time, end time and duration.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['employee_id', 'shift_date', 'shift_start_time']
+    columns:
+      - name: shift_id
+        description: Surrogate key on employee_id + shift_date + shift_start_time.
+        data_tests:
+          - unique
+          - not_null
+      - name: employee_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_stroopwafelshop__employees')
+                field: employee_id
+      - name: role
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Baker', 'Cashier']
+      - name: shift_duration_hours
+        description: Shift length in hours (end minus start).
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: false

@@ -1,0 +1,158 @@
+version: 2
+
+models:
+  - name: dim_products
+    description: One row per product with current price, cost and unit margin.
+    columns:
+      - name: product_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: unit_margin
+        description: unit_price - unit_cost.
+      - name: unit_margin_pct
+        description: unit_margin as a fraction of unit_price.
+
+  - name: dim_employees
+    description: One row per employee. Personal data (date of birth, contact number) is intentionally excluded.
+    columns:
+      - name: employee_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: hourly_rate
+        description: Current hourly wage in EUR.
+
+  - name: dim_promotions
+    description: One row per promotion with its product, validity period and discount rate.
+    columns:
+      - name: promotion_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: product_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id
+      - name: duration_days
+        description: Number of days the promotion runs, start and end date included.
+
+  - name: fct_sales_lines
+    description: >
+      Sales fact at line grain: one row per product per sale. Sale-level attributes
+      (employee, date, payment type) are denormalised onto each line. Cost and margin
+      use the current product cost, not the cost at the time of sale.
+    columns:
+      - name: sales_line_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: sale_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_sales')
+                field: sale_id
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id
+      - name: promotion_id
+        description: Null when no promotion was applied.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_promotions')
+                field: promotion_id
+      - name: employee_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_employees')
+                field: employee_id
+      - name: payment_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['cash', 'credit_card', 'debit_card']
+      - name: gross_amount
+        description: unit_price * quantity_sold, before discount.
+      - name: discount_amount
+        description: Total discount on the line.
+      - name: net_amount
+        description: gross_amount - discount_amount; what the customer paid.
+      - name: cost_amount
+        description: Current unit cost * quantity_sold.
+      - name: margin_amount
+        description: net_amount - cost_amount.
+
+  - name: fct_sales
+    description: >
+      Sales fact at sale grain: one row per till transaction, with totals rolled up
+      from fct_sales_lines. Includes sales without any lines (is_empty_sale = true),
+      which are zero-value transactions in the source.
+    columns:
+      - name: sale_id
+        description: Primary key.
+        data_tests:
+          - unique
+          - not_null
+      - name: employee_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_employees')
+                field: employee_id
+      - name: payment_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['cash', 'credit_card', 'debit_card']
+      - name: line_count
+        description: Number of sales lines in the sale; 0 for empty sales.
+      - name: net_amount
+        description: Amount paid, as recorded on the sale (equals the sum of line net amounts).
+      - name: has_promotion
+        description: True when at least one line had a promotion applied.
+      - name: is_empty_sale
+        description: True when the sale has no sales lines.
+
+  - name: fct_shifts
+    description: >
+      One row per employee shift with hours worked and labor cost. Labor cost uses
+      the employee's current hourly rate, not the rate at the time of the shift.
+    columns:
+      - name: shift_id
+        description: Primary key (surrogate key on employee, date and start time).
+        data_tests:
+          - unique
+          - not_null
+      - name: employee_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_employees')
+                field: employee_id
+      - name: role
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Baker', 'Cashier']
+      - name: labor_cost
+        description: shift_duration_hours * hourly_rate, in EUR.
+        data_tests:
+          - not_null
